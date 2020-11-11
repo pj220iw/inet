@@ -12,6 +12,7 @@ Release: |release|
    :maxdepth: 2
 
    ch-introduction
+   ch-naming
    ch-packets
    ch-sockets
    ch-testing

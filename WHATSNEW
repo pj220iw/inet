@@ -1,5 +1,363 @@
+What has been changed?
+Why has it been changed?
+How does one follow the change?
+
 Recent changes in the INET Framework
 ====================================
+
+INET-4.3 (December 2020) - Stable
+---------------------------------
+
+This is a new minor stable release of the INET 4.x branch. This version includes
+a few important new features required to the Time-Sensitive Networking (TSN),
+some backward incompatible changes, a number of small improvements, and several
+bug fixes. This version requires OMNeT++ 6. preview 9 or later.
+
+Notable backward incompatible changes are the following:
+
+1. Packet API
+
+   The packet tag, chunk tag and chunk region tag APIs have been changed to
+   store all tags using shared pointers. Moreover, the vectors containing said
+   tags have also been changed to be stored using shared pointers. These shared
+   data structures are automatically copied behind the scenes when they are
+   modified and shared among multiple packets.
+
+   The reasoning is that packets are copied quite often, so this operation must
+   be very efficient both in terms of space and time. Often the copied packet is
+   not modified with respect to the attached tags so it makes sense to share these
+   data structures. The previous packet API already shared the packet data between
+   copies, but it didn't share the attached tags.
+
+   Internally, the class TagSet has been replaced with another class, SharedTagSet,
+   and similarly, the class RegionTagSet has been replaced with SharedRegionTagSet.
+
+   This change requires the modification of simulation models, because tags are
+   now returned as shared pointers. Moreover, a different method must be called,
+   the ones with the 'ForUpdate' suffix, to modify existing tags. Due to this
+   copy-on-write semantics, this change can also break existing user code if
+   the tag pointer is stored longer and updated later on without retrieving
+   the tag from the packet again.
+
+2. Registering protocol and services
+
+   There was some confusion with respect to the expected module gates in the
+   arguments of the registerService and registerProtocol methods. Following
+   the OSI terminology, the registerService method now takes the requestIn
+   and indicationOut gates, the registerProtocol method takes the requestOut
+   and indicationIn gates as arguments. This change has been followed with
+   all affected modules.
+
+   Unfortunately, this change may break existing code silently, although not
+   very likely, because the registrations may provide the incorrect gates to
+   the MessageDispatcher modules, which in turn will dispatch the packets to
+   the wrong modules or not at all. Luckily, in the latter case, an error will
+   be thrown and the simulation terminates. 
+
+2. Mobility
+
+   All methods in the IMobility interface that returned a Coord or a Quaternion
+   data structure by value has been changed to return a const reference instead.
+   These methods, especially the getCurrentPosition() method, may be called quite
+   often, so avoiding the copying of said data structures increases performance.
+
+   This change can be followed easily by implementations, because in most cases
+   the values were already stored in the mobility module. This change is not
+   expected to break existing models silently.
+
+3. Radio medium analog model
+
+   Similarly to the IMobility interface change, several methods that returned
+   or received as an argument a Coord or a Quaternion data structure by value
+   has been changed to return or receive a const reference instead. Again, these
+   methods may be called quite often in wireless network simulations, so avoiding
+   the copying of these data structures increases performance.
+
+   This change has very little effect on the implementations, since in most cases
+   the values were already stored in the related object with a large enough dynamic
+   extent. This change is not expected to break existing models silently.
+
+4. Ethernet
+
+   linklayer/physicallayer layered Ethernet model
+   parameter changes
+     Ethernet duplex mode
+   refactoring
+     EtherMacBase, EtherMac, EtherMacFullDuplex, EtherBus, WireJunction
+     EthernetMacProtocolDissector, EthernetMacProtocolPrinter
+    
+   The Ethernet switch frame relay functionality provied by the MacRelayUnit and
+   Ieee8021dRelay modules have been refactored
+
+   Several new Ethernet physical layer modules have been added. These modules
+   are only used in the layered Ethernet model.
+
+   WireJunction
+   WirelessSignal and Signal seperation, why no WiredSignal??
+
+5. TCP
+
+   DC-TCP flavour Marcel Marek, ide?
+   better ECN support Marcel Marek, ide?
+   window handling
+
+6. IEEE 802.1q support
+
+   The LinkLayerNodeBase base module has been extended with separate and optional
+   IEEE 802.3 and IEEE 802.1q protocol layers. This mode of operation is distinct
+   from the default operation where the Ethernet protocol is part of the network
+   interface. The advantage is that various additional IEEE 802 protocols such as
+   802 LLC, 802 SNAP, 802.1q and 802.1ae are better composable this way.
+
+   Several small layered protocol models and infrastructure components have been
+   added. These include among others protocol header inserters and checkers,
+   protocol printers and dissectors.
+
+7. VLAN support
+
+   The VLAN support has been completely refactored to use separate modules for
+   filtering and mapping VLAN indications and requests on packets according to
+   switch policy. The new VlanIndFilter and VlanReqMapper modules are part of
+   a VLAN policy module of switch nodes.
+
+   This change may cause simulations to ignore certain parameters which are
+   expected to affect virtual interfaces.
+
+8. Virtual interfaces
+
+   The vlan submodule vector of network nodes inherited from LinkLayerNodeBase
+   has been renamed to virt. The original name suggested misleadingly that this
+   set of network interfaces were meant to be used exclusively for VLAN, but that
+   is not the case. The virtual interfaces, called VirtualInterface, can be used
+   for all kinds of protocol parameterization such as changing the source MAC
+   address.
+
+   This change may cause simulations to ignore certain parameters which are
+   expected to affect virtual interfaces.
+
+9. Renames
+
+   The InterfaceEntry module that represents network interfaces has been renamed
+   to NetworkInterface. The old name was a left-over from the time when this
+   class was really an integral part of the InterfaceTable module. This is no
+   longer the case, thus the renaming makes perfect sense.
+
+   The queueing API has been updated to reflect the new push/pull duality in
+   the naming convention as opposed to the old push/pop duality. For example,
+   the old packetPopped signal has been renamed to packetPulled, and the old
+   popPacket method in the IPassivePacketSource has been renamed to pullPacket.
+
+   The IPacketQueueingElement C++ interface and the corresponding base class,
+   called PacketQueueingElementBase, has been renamed to IPacketProcessor and
+   PacketProcessorBase, respectively. The reason is that, although these classes
+   are part of the queueing API, they are more general and their original name
+   didn't capture this fact. Also, in some protocol implemntation supporting
+   derived classes the original names looked really weird.
+
+   The Protocol::ieee8022 global protocol variable has been renamed and split
+   into Protocol::ieee8022llc and Protocol::ieee8022snap.
+
+   All integral C++ type alias have been replaced with the standard variants.
+   For example, the int64 type alias has been replaced with int64_t.
+
+   These changes will result in compilation errors in simulation models which
+   are affected and they are easy to follow.
+
+10. Removed models
+
+    The NetAnimTrace module has been removed. The visualization functionality it
+    provided has been replaced with the much more versatile and feature rich
+    visualizer modules.
+
+    The PacketDump class, which was used to provide a very basic string representation of
+    the packet content, has been removed. The packet printer API is a much more versatile
+    and widely parameterizable way of printing packets.
+
+    The EtherBus module has been removed because it has been replaced with the
+    WireJunction module.
+
+    The Ieee8021qEncap module has been removed. This module was used in the Ethernet
+    network interfaces to provide IEEE 802.1q protocol support and VLAN networking.
+
+TODO 11. Queueing model
+
+Notable backward compatible changes are the following:
+
+1. Packet API
+
+   The Packet API has been extended with several new replace and update methods.
+   The replace methods allow replacing arbitrary parts of the packet content with
+   a single method call. The update methods allow updating arbitrary parts of the
+   packet content in place with a single method call. Similarly to the completeness
+   of these methods, the remove and insert methods have also been extended.
+
+   Moreover, the Packet API has been extended with a packet level region tag
+   support. This allows attaching region tags to the data of packets similarly
+   to how chunks already allowed this. The main difference is that when data
+   is attached to chunks, then it must be in a form that can be shared among
+   multiple packets that are sharing the same chunk throughout the network. For
+   example, the creation timestamp of coherent data fragments is such a data.
+   In contrast, the queueing time of coherent data fragments belongs to the
+   individual packets, and must be separately updated for different paths the
+   same data takes in the network.
+
+   A new chunk class, called EncryptedChunk, has been added that allows storing
+   encrypted data in a packet without actually encrypting the data. Internally,
+   the new chunk uses a shared reference to the encrypted chunk and the length
+   of the encrypted binary representation.
+
+   Efficient parsim support has been added to all classes of the Packet API,
+   including the Packet class itself, all chunk classes and all tags.
+
+   The PacketProtocolTag has been extended with an extra front and back offset
+   that further specifies where the actual protocol is to be found within the
+   packet data. This feature is primarily useful to keep the associated protocol
+   of the packet up-to-date even while the packet is being constructed within a
+   protocol module. Doing so allows the packet printer and packet dissector to
+   understand a partially encapsulated, incomplete packet.
+
+2. Enhanced Interior Gateway Routing Protocol (EIGRP)
+
+TODO 2. EIGRP by ...
+
+2. Clock model
+
+   ClockUserModuleBase, ClockUserModuleMixin
+   add clock support to a few models: UdpBasicApp, InterPacketGap, TransmitterBase, PeriodicGate
+
+3. Packet flow and timing measurements
+
+   packet event, packet flow, packet timing, packet flow visualizer, FlowTag, TimeTag
+   IdentityTag, bit identity tracking
+   packetFlowStarted, packetFlowEnded
+
+4. Queueing model
+
+   added packet streaming API
+   enqueuePacket, dequeuePacket
+   pushPacketStart, pushPacketEnd, pushPacketProgress, pullPacketStart, pullPacketEnd, pullPacketProgress
+   PacketFilterBase, PacketSchedulerBase, PacketClassifierBase, PacketDuplicatorBase, PacketProcessorBase
+   many queueing model elements support pushing and pulling MarkovClassifier, MarkovScheduler
+   many queueing model elements support streaming PacketMultiplexer, PacketDemultiplexer
+   PacketProcessorBase, InstantServer, ActivePacketSourceBase, PassivePacketSourceBase, PacketGate, PeriodicGate, DynamicClassifier, ActivePacketSinkBase, PassivePacketSourceBase
+   PacketPusherBase, PacketPullerBase, PacketGateBase, PacketFlowBase
+   IPacketProcessor, IPacketPusher, IPacketPuller, IPacketGate, IPacketQueue, IPacketFlow
+   PreemptableStreamer, PreemptingServer, FragmentTag
+
+5. new socket processing components for ethernet and LLC
+
+   socket handler
+   socket table
+   socket packet processor
+
+6. new protocol support model
+
+   fragmentation/defragmentation
+   aggregation/deaggregation
+   crc/fcs
+   transmitter/receiver
+
+7. visualizer
+
+   spectrum visualizer
+   PacketFlow*Visualizer
+   MediumCanvasVisualizer with better spectrum/spectogram visualization
+   Rasterized2DFunction, LeftCurryingFunction, RightCurryingFunction, PeriodicallyInterpolated2DFunction
+   minnan/maxnan
+
+8. new features (.oppfeatures):
+
+   clock support
+   IEEE 802.2
+   queueing
+   queueing tutorial
+   protocol support
+   protocol tutorial
+   emulation showcase
+
+9. new examples and new showcases
+
+   clock
+   layered Ethernet interface
+   preemption
+   cut-through
+   gating
+   DC-TCP
+   timing
+   spectrum visualization
+   analog model
+   videostreaming
+   updated examples
+     largenet
+     IEEE 802.1d
+     vlan
+
+10. Documentation
+
+    new chapters in the user's guide
+      clock model
+      collecting results
+    updated chapters in the user's guide
+      queueing
+      emulation
+
+11. Printing formatted output EV
+
+    added formatting
+    better str() methods
+    new EV_FIELD, EV_ENDL macros
+    IPrintableObject moved to common and added template support for printing objects and default shift operator
+
+12. Testing
+   
+    fingerprinttest
+       multiple fingerprints, fingerprint calculator option
+    new tests
+       clock model
+       protocol support
+       EV printing and formatting
+
+13. Bug fixes
+   
+    TCP nagle
+    VoipStream
+    Units division and other operators, integral type selection/promotion
+
+14. Cleanup
+
+    uniform headergurads
+    whitespace cleanup, removed trailing spaces, replaced tabs to spaces
+    code formatting
+    added official GPL-2, GPL-3
+    updated file copyright headers
+
+15. Other changes
+
+    extended IProtocolRegistrationListenger for protocol group, any protocol: DefaultProtocolRegistrationListener, TransparentProtocolRegistrationListener
+    added OperationalMixin
+    added network base modules NetworkBase, WiredNetworkBase, WirelessNetworkBase
+    ModuleRef...
+    OmittedModule, submodule autolayout
+    ProtocolTag, front/back offset extension
+
+    New initialization stages: INITSTAGE_CLOCK, INITSTAGE_NETWORK_LAYER_PROTOCOLS
+
+    PCAPng!, IPcapWriter, PcapngWriter, PcapWriter, PcapReader
+    PCAP recorded included in networks, network nodes, network interfaces
+
+    more complete Ipv6HeaderSerializer, DsdvHelloSerializer
+
+    FingerprintCalculator
+
+    extended the use transmissionStared/transmissionEnded, receptionStarted/receptionEnded to wired models
+
+    followed omnet changes
+      rescheduleAt, scheduleAfter
+      forceTransmissionFinishTime
+
+    MessageDispatcher for packet streaming, better circle detection
+
+    Enter_Method_Silent -> Enter_Method
 
 INET-4.2 (January 2020) - Stable
 --------------------------------
