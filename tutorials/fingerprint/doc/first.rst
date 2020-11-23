@@ -1,5 +1,3 @@
-.. :orphan:
-
 About Fingerprint Testing
 =========================
 
